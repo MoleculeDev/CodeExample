@@ -1,0 +1,384 @@
+using System.Collections;
+using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
+using TMPro;
+
+public class GamePlayController : MonoBehaviour
+{
+    [Header("UI Elements")]
+    public Text speedText;
+    public Slider speedSlider;
+    public Slider distanceSlider;
+    public GameObject uiPanel;
+    public GameObject winPanel;
+    public GameObject losePanel;
+    public GameObject finishPanel;
+    public GameObject tutorialPanel;
+    public GameObject bonusPanel;
+    public GameObject bonusSpeedMax;
+    public GameObject driftingBonusSlider;
+    Slider driftingBonusSliderUI;
+    public Slider bonusSlider;
+    public GameObject nextButton;
+    public Text bonusLevelText;
+    public Text driftScoreText;
+
+
+    [Header("Currencies")]
+    [HideInInspector] public int earnedCoin;
+    public Text earnedCoinText;
+    public GameObject coinImage;
+    [HideInInspector] public int allCoin;
+    public Text finishEarnedCoin;
+    public Text finishEarnedDriftScore;
+    public Text finishEarnedCoinLose;
+    public Text finishEarnedDriftScoreLose;
+    [HideInInspector] public int bonusMaxSpeed;
+
+    [Header("Scripts")]
+    SoundScript soundScript;
+    CameraSmoothMove cameraSmoothMove;
+    CarController carController;
+    public GameHandler gameHandler;
+
+    [Header("Particle Systems")]
+    public GameObject coinTake;
+
+    [Header("GameObjects")]
+    Transform finishPoint;
+    public GameObject bonusPlatform;
+    [HideInInspector] public GameObject finalTrampline;
+    public GameObject playerCar;
+
+    [Header("Bools")]
+    public bool gameOver;
+    bool addSpeedMax;
+    [HideInInspector]public bool driftingBonus;
+
+    //Floats
+    float driftScore;
+
+    private void Start()
+    {
+            
+        
+        finishPoint = GameObject.FindGameObjectWithTag("Finish").gameObject.transform;
+        soundScript = GameObject.FindGameObjectWithTag("Sound").GetComponent<SoundScript>();
+        cameraSmoothMove = GameObject.FindGameObjectWithTag("MainCamera").GetComponent<CameraSmoothMove>();
+        finalTrampline = GameObject.FindGameObjectWithTag("FinalTrampline");
+        driftingBonusSliderUI = driftingBonusSlider.GetComponent<Slider>();
+
+        //StartCoroutine(SpeedTextApplier());
+    }
+
+    /// <summary>
+    /// Calls when player start drifting and it will compute and decrease Drifting slider while player drift
+    /// </summary>
+    public void DriftingBonusIncrease() 
+    {
+        if (driftingBonusSliderUI.value < driftingBonusSliderUI.maxValue && !driftingBonus)
+        {
+            driftingBonusSliderUI.value += 1 * Time.deltaTime;
+
+            if (driftingBonusSliderUI.value == driftingBonusSliderUI.maxValue)
+            {
+                driftingBonusSlider.transform.GetChild(1).gameObject.SetActive(true);
+                driftingBonus = true;
+            }
+        }
+
+    }
+
+    /// <summary>
+    /// Calls when player start drift and it compute driftscore and show it on Text
+    /// </summary>
+    public void DriftingScore() 
+    {
+        if (!driftingBonus)
+        {
+            driftScoreText.gameObject.SetActive(true);
+            driftScore++;
+            driftScoreText.text = "DRIFT" + "\n" + driftScore;
+        }
+        else
+        {
+            driftScoreText.gameObject.SetActive(true);
+            driftScore += 2;
+            driftScoreText.text = "DRIFT 2X" + "\n" + driftScore;
+        }
+    }
+
+
+    /// <summary>
+    /// Calls when player reached max Drift value and it will decrease slider value While Max drift Effect is enabled
+    /// </summary>
+    public void DriftingBonusDecrease() 
+    {
+
+         if (driftingBonus)
+        {
+            driftingBonusSliderUI.value -= 0.5f * Time.deltaTime;
+
+            if (driftingBonusSliderUI.value == driftingBonusSliderUI.minValue)
+            {
+                driftingBonusSlider.transform.GetChild(1).gameObject.SetActive(false);
+                driftingBonus = false;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Set the variable of player GameObject after Instantiating the players
+    /// </summary>
+    public void FindTheCar() 
+    {
+        playerCar = GameObject.FindGameObjectWithTag("Player");
+        carController = playerCar.GetComponent<CarController>();
+
+        DistanceSet();
+
+        StartCoroutine(DistanceCheck());
+
+    }
+
+
+    /// <summary>
+    /// Restart current level
+    /// </summary>
+    public void RestartLevel() 
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+    }
+
+
+    /// <summary>
+    /// Check distance every 0.05 second for visualizing distance between player and finish position
+    /// </summary>
+    /// <returns></returns>
+    #region Distance Check
+    IEnumerator DistanceCheck()
+    {
+        float distance;
+
+        while (playerCar)
+        {
+            distance = Vector3.Distance(playerCar.transform.position, finishPoint.position);
+            distanceSlider.value = distanceSlider.maxValue - distance;
+            yield return new WaitForSeconds(0.05f);
+        }
+    }
+
+    /// <summary>
+    /// Check distance at start
+    /// </summary>
+    public void DistanceSet() 
+    {
+        distanceSlider.maxValue = Vector3.Distance(playerCar.transform.position, finishPoint.position);
+        distanceSlider.transform.GetChild(2).gameObject.GetComponent<Text>().text = "Level " + gameHandler.shopCars.level.ToString();
+
+        earnedCoin = 0;
+        earnedCoinText.text = earnedCoin.ToString();
+
+        bonusMaxSpeed = gameHandler.shopCars.maxSpeed;
+
+
+        if (SceneManager.GetActiveScene().name == "BonusLevel") { bonusLevelText.gameObject.SetActive(true); }
+    }
+
+    #endregion
+
+    /// <summary>
+    /// Calls when player collides with money
+    /// </summary>
+    /// <param name="collidePoint"></param>
+    public void CoinTake(Transform collidePoint) 
+    {
+        earnedCoin += 5;
+        earnedCoinText.text = earnedCoin.ToString();
+        coinImage.GetComponent<Animator>().SetTrigger("Took");
+        soundScript.CoinTake();
+        Instantiate(coinTake, collidePoint.position, Quaternion.identity);
+    }
+
+    /// <summary>
+    /// Calls when car will drift
+    /// </summary>
+    public void DriftinCoinPlus() 
+    {
+        earnedCoin++;
+        earnedCoinText.text = earnedCoin.ToString();
+        coinImage.GetComponent<Animator>().SetTrigger("Took");
+        soundScript.CoinTake();
+    }
+
+
+    /// <summary>
+    /// Close ui panel and activates finish panel
+    /// </summary>
+    public void GameOver() 
+    {
+        if (!gameOver)
+        {
+            uiPanel.SetActive(false);
+            finishPanel.SetActive(true);
+        }
+    }
+
+    /// <summary>
+    /// Activates Finish panel
+    /// </summary>
+    /// <param name="multiplier"></param>
+    public void FinishPanelActivate(int multiplier) 
+    {
+        winPanel.SetActive(true);
+        earnedCoin *= multiplier;
+        StartCoroutine(CountMoney());
+        gameOver = true;
+    }
+
+
+    /// <summary>
+    /// Start counting money and Drift score when player wins
+    /// </summary>
+    /// <returns></returns>
+    IEnumerator CountMoney() 
+    {
+        float currentMoney = 0;
+        float currentDrift = 0;
+        float time = 0;
+
+        finishEarnedCoin.text = "+" + (int)currentMoney;
+        finishEarnedDriftScore.text = "+" + (int)currentDrift;
+
+
+        while (currentMoney != earnedCoin) 
+        {
+            currentMoney = Mathf.Lerp(currentMoney, earnedCoin, time/4);
+            time += Time.deltaTime;
+            finishEarnedCoin.text = "+" + (int)currentMoney;
+
+            yield return new WaitForEndOfFrame();
+        } 
+
+        while (currentDrift != driftScore)
+        {
+            currentDrift = Mathf.Lerp(currentDrift, driftScore, time / 4);
+            time += Time.deltaTime;
+            finishEarnedDriftScore.text = "+" + (int)currentDrift;
+
+            yield return new WaitForEndOfFrame();
+        }
+
+        if (currentDrift == driftScore && currentMoney == earnedCoin)
+        {
+            nextButton.SetActive(true);
+        }
+
+        gameHandler.shopCars.money += earnedCoin;
+        gameHandler.shopCars.driftScore += driftScore;
+
+        gameHandler.SaveData();
+
+    }
+
+    /// <summary>
+    /// Adding force when player touch the screen while car goes to trampline
+    /// </summary>
+    public void AddSpeed() 
+    {
+        if (bonusSlider.value <= bonusSlider.maxValue && !addSpeedMax) 
+        {
+            Debug.Log(bonusSlider.value);
+            bonusSlider.value += 1f;
+            carController.rb.AddRelativeForce(Vector3.forward * 5, ForceMode.VelocityChange);
+            carController.maxSpeed = Mathf.Clamp(carController.maxSpeed, 70, bonusMaxSpeed);
+            Instantiate(carController.addSpeedEffect, playerCar.transform.position, Quaternion.identity);
+            print(carController.maxSpeed);
+
+            if (bonusSlider.value == bonusSlider.maxValue)
+            {
+                bonusPanel.transform.GetChild(1).gameObject.GetComponent<Text>().text = "UPGRADE SPEED BONUS!";
+                bonusPanel.transform.GetChild(1).gameObject.GetComponent<Animator>().SetTrigger("Upgrade");
+                addSpeedMax = true; bonusSpeedMax.SetActive(true); 
+
+            }
+
+        }
+
+    }
+
+    /// <summary>
+    /// Instaniates all bonus asphalts
+    /// </summary>
+    public IEnumerator InstaniateBonusPlatforms()
+    {
+        Vector3 bonusStartPos = finalTrampline.transform.position;
+        //bonusStartPos.y = -9.5f;
+        //bonusStartPos.x = 0;
+        bonusStartPos.z += 200;
+        bool allInstaniated = true;
+
+        while (allInstaniated) 
+        {
+            for (int i = 0; i < 10; i++)
+            {
+                GameObject platform = Instantiate(bonusPlatform, bonusStartPos, Quaternion.Euler(-90,-90,0));
+                platform.transform.GetChild(0).gameObject.GetComponent<TextMeshPro>().text = (i + 1) + "X";
+                platform.transform.GetComponent<BonusFloor>().multiplier = (i + 1);
+
+                bonusStartPos.z += 40;
+                if (i == 10 - 1) 
+                {
+                    allInstaniated = false;
+                }
+            }
+
+            yield return new WaitForSeconds(0.1f);
+        }
+
+    }
+
+    /// <summary>
+    /// Calls when player lose. Player will stop and lose panel will 
+    /// activate and show how many money and drift score earned player
+    /// </summary>
+    public void Lose() 
+    {
+        if (!gameOver) 
+        {
+            playerCar.GetComponent<CarController>().FullBrake();
+            gameOver = true;
+            uiPanel.SetActive(false);
+            losePanel.SetActive(true);
+            finishEarnedCoinLose.text = "+" + earnedCoin;
+            finishEarnedDriftScoreLose.text = "+" + driftScore;
+
+            gameHandler.shopCars.money += earnedCoin;
+            gameHandler.shopCars.driftScore += driftScore;
+
+            gameHandler.SaveData();
+        }
+    }
+
+
+    /// <summary>
+    /// Change the level to the next level randomly or by scene coun in build settings
+    /// </summary>
+    public void NextLevel() 
+    {
+        if (gameHandler.shopCars.level >= 6)
+        {
+            SceneManager.LoadScene(Random.Range(0, SceneManager.sceneCountInBuildSettings));
+            gameHandler.shopCars.level += 1;
+            
+        }
+        else
+        {
+            SceneManager.LoadScene(gameHandler.shopCars.level + 1);
+            gameHandler.shopCars.level += 1;
+        }
+
+        gameHandler.SaveData();
+    }
+}
